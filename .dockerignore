@@ -1,0 +1,22 @@
+# Build output
+dist/
+
+# Test + tooling
+node_modules/
+coverage/
+test/
+
+# VCS
+.git
+.github
+
+# Local config & env (package.json + package-lock.json are copied explicitly by the Dockerfile)
+*.md
+.env
+.env.*
+!.env.example
+eslint.config.js
+vitest.config.ts
+.prettierrc.json
+.nvmrc
+.DS_Store

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The base layer is environment-agnostic. Overlays (e.g. prod) compose it and
+# pin environment-specific values — this is the GitOps seam.
+namespace: bookmarks
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml

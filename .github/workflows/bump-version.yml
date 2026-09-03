@@ -1,0 +1,80 @@
+name: Auto-bump patch version
+
+# On every push/merge to main, compute the next patch version from the
+# highest existing v* tag and push it. The new tag triggers CD + Release
+# via workflow_dispatch (avoids PAT-scope issues with tag-push triggers).
+on:
+  push:
+    branches: [main]
+
+# Serialize runs: two rapid main pushes must never compute the same next
+# version and race to push the same tag.
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+permissions:
+  contents: write # needed to create + push the git tag
+  actions: write # needed to dispatch CD + Release workflows
+
+jobs:
+  bump-and-tag:
+    name: bump-and-tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Use GITHUB_TOKEN for checkout (default) — we push the tag
+          # with GITHUB_TOKEN too; the downstream workflows are triggered
+          # via workflow_dispatch, not tag-push events.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute next patch version
+        id: bump
+        run: |
+          # Highest existing version tag, e.g. "v0.1.2" (none -> start at v0.1.0)
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -1 || true)
+
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+          else
+            base="${latest#v}"
+            IFS='.' read -r major minor patch <<< "$base"
+            patch=$((patch + 1))
+            next="v${major}.${minor}.${patch}"
+          fi
+
+          echo "Latest tag: ${latest:-<none>} -> next: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.bump.outputs.next }}" "${{ github.sha }}"
+          git push origin "${{ steps.bump.outputs.next }}"
+          echo "Pushed tag ${{ steps.bump.outputs.next }}"
+
+      # Trigger the versioned-image publish + Release via workflow_dispatch.
+      # (Works reliably regardless of PAT scopes — uses the repo's
+      # GITHUB_TOKEN with actions: write. GITHUB_TOKEN tag pushes do NOT
+      # fire workflows, so we dispatch explicitly.)
+      - name: Trigger image publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run publish.yml \
+            --ref "${{ github.ref_name }}" \
+            -f tag="${{ steps.bump.outputs.next }}"
+          echo "Dispatched publish.yml for ${{ steps.bump.outputs.next }}"
+
+      - name: Trigger Release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --ref "${{ steps.bump.outputs.next }}" \
+            -f tag="${{ steps.bump.outputs.next }}"
+          echo "Dispatched release.yml for ${{ steps.bump.outputs.next }}"

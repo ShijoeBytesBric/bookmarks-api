@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# What the CD workflow applies: kubectl apply -k infra/k8s/overlays/prod
+resources:
+  - ../../base
+
+namespace: bookmarks
+
+# Rewrite the base placeholder image to the real GHCR path.
+# The CD workflow pins the image by digest after applying this manifest,
+# so the tag here doesn't matter in practice.
+images:
+  - name: ghcr.io/YOUR-USERNAME/bookmarks-api
+    newName: ghcr.io/shijoebytesbric/bookmarks-api
+
+# Inject imagePullSecret so the kubelet can authenticate to ghcr.io
+patches:
+  - target:
+      kind: Deployment
+      name: bookmarks-api
+    patch: |
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-secret

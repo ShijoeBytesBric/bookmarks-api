@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+*.md
+.claude
+.env
+.env.*
+!.env.example

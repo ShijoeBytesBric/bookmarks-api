@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bookmarks-config
+# Non-secret runtime config. Everything here has a matching default in src/config.ts.
+data:
+  PORT: '3000'
+  HOST: '0.0.0.0'
+  LOG_LEVEL: 'info'
