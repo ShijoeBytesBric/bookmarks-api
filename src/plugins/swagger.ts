@@ -10,9 +10,9 @@ import { jsonSchemaTransform } from 'fastify-type-provider-zod';
 // relative to this file so it works both from source (tsx, src/) and from
 // the compiled output (dist/), where package.json sits two levels up.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { version } = JSON.parse(
-  readFileSync(path.join(here, '../../package.json'), 'utf8'),
-) as { version: string };
+const { version } = JSON.parse(readFileSync(path.join(here, '../../package.json'), 'utf8')) as {
+  version: string;
+};
 
 /**
  * Registers OpenAPI docs for the app.
