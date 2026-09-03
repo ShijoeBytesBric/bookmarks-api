@@ -1,8 +1,8 @@
 name: Publish versioned image
 
-# Builds and pushes the immutable vX.Y.Z image to GHCR.
-# Triggered either by a manual tag push (v*), or dispatched by
-# bump-version.yml after it auto-increments the version on a main merge.
+# Points the vX.Y.Z tag at the image that CD already built and pushed for the
+# same commit — no rebuild. Triggered either by a manual tag push (v*), or
+# dispatched by bump-version.yml after it auto-increments the version on main.
 on:
   push:
     tags: ['v*']
@@ -24,18 +24,13 @@ env:
   IMAGE_NAME: ghcr.io/shijoebytesbric/bookmarks-api
 
 jobs:
-  build-and-push:
-    name: build-and-push
+  retag:
+    name: retag
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # push the image to GHCR
-      id-token: write # for SLSA provenance attestation
-      attestations: write
+      packages: write # push the retagged version tag to GHCR
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -46,44 +41,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      # Version: workflow_dispatch carries inputs.tag; a manual v* push uses
-      # the ref name (e.g. "v0.1.4").
       - name: Resolve version
         id: version
         run: |
           TAG="${{ inputs.tag || github.ref_name }}"
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $TAG"
+          echo "Tagging version: $TAG"
 
-      - name: Generate image tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            # immutable per-commit tag
-            type=sha,prefix=sha-,format=short
-            # versioned tag (v0.1.5) from the resolved version. Use raw instead
-            # of semver: on workflow_dispatch there is no git tag ref, so
-            # type=semver derives nothing; raw always tags with the version.
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.version != '' }}
-
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
+      # CD pushes a "main" tag on every merge to main. Point the version tag
+      # at that same digest instead of rebuilding the image.
+      - name: Retag CD image as version
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          for i in $(seq 1 30); do
+            if DIGEST=$(docker buildx imagetools inspect \
+                "${{ env.IMAGE_NAME }}:main" \
+                --format '{{.Manifest.Digest}}' 2>/dev/null); then
+              break
+            fi
+            sleep 10
+          done
+          [ -n "$DIGEST" ] || { echo "CD image not ready" >&2; exit 1; }
+          docker buildx imagetools create \
+            --tag "${{ env.IMAGE_NAME }}:$TAG" \
+            "${{ env.IMAGE_NAME }}@$DIGEST"
