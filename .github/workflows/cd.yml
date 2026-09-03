@@ -25,6 +25,8 @@ jobs:
     permissions:
       contents: read
       packages: write # push the image to GHCR
+      id-token: write # OIDC identity for the attestation
+      attestations: write # push the attestation to the registry
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -65,6 +67,13 @@ jobs:
           # SLSA provenance + SBOM metadata embedded in the image
           provenance: true
           sbom: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   deploy-to-kind:
     name: deploy-to-kind
