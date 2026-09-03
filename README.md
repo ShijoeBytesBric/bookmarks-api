@@ -46,7 +46,7 @@ on GitHub's runners, so everything is self-contained.
 - Multi-stage Docker build (small final image, ~150 MB)
 - Runs as non-root user for security
 - Includes a health check that Kubernetes and Docker both use
-- Signed with SLSA provenance and an SBOM (supply chain transparency)
+- Built with SLSA provenance and an SBOM attached (supply chain metadata)
 
 **Kubernetes manifests** (`infra/k8s/`)
 

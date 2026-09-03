@@ -25,8 +25,6 @@ jobs:
     permissions:
       contents: read
       packages: write # push the image to GHCR
-      id-token: write # for SLSA provenance attestation
-      attestations: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -64,16 +62,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # SLSA provenance + SBOM attestations on the image
+          # SLSA provenance + SBOM metadata embedded in the image
           provenance: true
           sbom: true
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
 
   deploy-to-kind:
     name: deploy-to-kind
